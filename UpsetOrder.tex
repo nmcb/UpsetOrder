@@ -1,0 +1,482 @@
+\documentclass{sigplanconf}
+\usepackage{stmaryrd}
+\usepackage{MnSymbol}
+
+\usepackage{ifpdf}
+\usepackage[usenames]{color}
+\definecolor{citationcolour}{rgb}{0,0.4,0.2}
+\definecolor{linkcolour}{rgb}{0,0,0.8}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,
+            urlcolor=linkcolour,
+            linkcolor=linkcolour,
+            citecolor=citationcolour,
+            pdftitle=Dependent Types for Your New World Order,
+            pdfauthor={Conor McBride},
+            pdfkeywords={}}  
+
+
+
+\usepackage{pig}
+
+
+\begin{document}
+\title{Upsetting The New World Order}
+\authorinfo{Conor McBride}
+           {University of Strathclyde}
+           {conor@strictlypositive.org}
+\maketitle
+
+\begin{abstract}
+  In a world where modelling information flow (to allow or prevent it)
+  is becoming increasingly critical, type systems which account only
+  for \emph{what} stuff consists of, not \emph{where} it is,
+  \emph{who} knows it, \emph{when} it is available, or other such
+  considerations of time and space, are sadly separated from key
+  concerns.  Dependent type systems generally require a Kripke
+  semantics to account for their contextualisation, so it might as
+  well be an interesting Kripke semantics. There should probably be a
+  sentence between the first two sentences and this sentence should
+  probably not exist. There should probably be a sentence after this
+  sentence but it does not exist yet.
+\end{abstract}
+
+
+\section{Introducing Worlds}
+
+Different things exist in different \emph{worlds}. Your computer has
+different data from my computer. The data available to the typechecker
+of my program are different from the data available to my program at
+runtime. Because I am a dependently typed programmer, abstract
+approximants to all data flow from runtime code to the typechecker,
+but, like Nathan Mishra-Linger and Tim
+Sheard~\cite{DBLP:conf/fossacs/Mishra-LingerS08}, I might like to
+ensure that information flow from typechecker to runtime is
+restricted, in order to obtain healthy \emph{erasure} properties and
+acknowledge the fact that quantities which exist only to sustain
+specifications need not occupy memory once the hard work starts.
+
+\newcommand{\wto}{\rightarrowtail}
+\newcommand{\hb}{\!:\!}
+\newcommand{\Ty}{\pentagram}
+\newcommand{\earth}{\bullet}
+\newcommand{\heaven}{\ast}
+\newcommand{\tn}[1]{\vdash #1 \;}
+
+Accordingly, let $W$ be a preorder of `worlds' $u,v,w$ with arrows
+$\wto$. (Of course, $W$ is thus a category, and I shall prefer to use
+categorical terminology.)  These worlds represent different places
+where data can exist and computation can happen.  For
+example\footnote{I say `example', despite my preference for
+  categorical terminology.}, $W=\{\earth,\heaven\}$ with $\earth \wto
+\heaven$ is the simplest nontrivial such system, modelling has runtime
+data on `earth', $\earth$, and typechecking in `heaven', $\heaven$,
+with information flowing only upwards.
+
+The preorder structure tells us between which worlds information can
+flow without explicit communication: that is, which worlds are
+\emph{in scope} for which other worlds. Worlds will show up in
+judgments: everything we construct will be constructed in a particular
+world. Worlds will show up in contexts: every variable we assume must
+be somewhere, as well as some kind of thing. Context entries look like
+$u\,x\hb S$, where $u$ is the world $x$ comes from and $S$ is its
+type. The key rule is this:
+\[
+\Rule{\Gamma,u\,x\hb S,\Delta\vdash\textsc{valid}\quad u\wto w}
+  {\Gamma,u\,x\hb S,\Delta\tn{w}\,x\in S}
+\]
+That is, $x$ can be used for constructions in any world $w$ (now
+part of the turnstile) to which $x$ may travel from its `home' world $u$.
+
+Many type systems have some implicit separation of worlds baked into
+them, and it is very often the case that the worlds something may
+inhabit are closely related with the kind of thing it is. For example,
+last century, we became too used to the idea that runtime stuff and
+the stuff of types were wholly distinct. It is liberating to discard
+this correlation and treat \emph{what} and \emph{where} as separable
+concerns. Motivation comes also from last century, when Hoare logic
+separated runtime `program variables' from `ghost variables', the
+stuff exclusively of \emph{specifications}, e.g. `on exit, program
+variable $p$ equals ghost variable $g$': $p$ and $g$ come from different
+worlds but stand for the same kinds of stuff.
+
+This paper is concerned not to establish a specific world order with a
+specific motivation, but rather to develop the concept in general and
+provide a framework for establishing dependent type systems with some
+sort of information flow. The point is not that there is one best
+world order, but that it is useful to consider which orders may be
+locally appropriate and how to transport constructions between them.
+Some useful world orders to bear in mind include the following.
+\[\begin{array}{c@{\quad}|@{\quad}c@{\quad}|@{\quad}c@{\quad}|@{\quad}c@{\quad}|@{\quad}c@{}c@{}c@{}l}
+\mbox{(i)} & \mbox{(ii)} & \mbox{(iii)} & \mbox{(iv)} &
+\multicolumn{3}{c}{\mbox{(v)}} \\
+            &               &               &     \ast 
+\\
+            &               &   \ast        & \nearrowtail\quad\nwarrowtail
+  & \ast \\
+\circledast & \bullet\;\ast & \uparrowtail  & \bullet_0\qquad\;\;\bullet_1 
+  & \uparrowtail &\nwarrowtail & & \;\ddots \nwarrowtail \qquad\ddots\\
+            &               &   \bullet     & \nwarrowtail\quad\nearrowtail 
+  & \;\bullet_0&\rightarrowtail&\bullet_1&\rightarrowtail\;\cdots\;\bullet_n\rightarrowtail\cdots \\
+            &               &               &     \blacksquare
+\end{array}\]
+Respectively, we have: (i) dependent type theory as we know it, all in
+one world; (ii) System F-like arrangements with no flow
+between terms and types; (iii) our running example, dependent type
+theory with erasure; (iv) coordinated computation in two separate
+sites with some common knowledge; (v) computation in a succession of
+stages, as used by Paula Severi and Fer-Jan de Vries to model
+productivity of stream computations~\cite{DBLP:conf/icfp/SeveriV12}.
+
+
+\section{Upsets of Worlds}
+
+An \emph{upset} of $W$ is a subset $U \subseteq W$ such that whenever
+$u\in U$ and $u\wto w$, $w\in U$. Once information has arrived in an
+upset $U$, it is trapped in $U$. Correspondingly, we shall obtain an
+erasure operation, removing the parts of constructions in any such
+$U$, as the rest of those constructions cannot make use of
+$U$-information.\footnote{We can draw $U$-shaped curves
+around upsets in diagrams like those above.} If, in (ii), we erase
+$\{\ast\}$, we translate from Church-style to
+Curry-style. In (iii), erasing $\{\ast\}$ gives us a translation to a
+system like Miquel's Implicit Calculus of
+Constructions~\cite{DBLP:conf/tlca/Miquel01}. In (iv), we might erase
+$\{\ast,\bullet_i\}$ to obtain the code to run in site $1-i$.
+In (v), erasing $\{\ast\}\cup\{\bullet_i|i\ge n\}$ obtains
+just the first $n$ stages.
+
+However, upsets are not just for erasure. Let $\Ty$ be an upset of
+$W$, namely the subset of worlds in which the construction of types is
+permitted. If we want to construct types at all, we should probably
+ensure that $\Ty$ is nonempty. The extent to which a system is
+`dependently typed' is in some way characterized by the information
+flow to worlds in $\Ty$.  In our example system, take
+$\Ty=\{\heaven\}\subseteq\{\earth,\heaven\}=W$. This system has `full
+dependent types', because all things are in scope for typechecking,
+but supports erasure in that information which exists \emph{only} for
+typechecking purposes cannot flow to runtime. Note that we can and
+should consider the alternative of taking $\Ty=W$, which would allow
+typecase for types in $\bullet$ whilst retaining parametricity with
+respect to types in $\ast$.
+
+In order to account for valid type formation, we shall need a monotone
+operator $\Ty\cdot : W \to \Ty$ which maps each world $w$ to the world
+in which the types of $w$-constructions are constructed. For our
+example, clearly $\Ty w = \ast$, but more subtle variants are
+conceivable.
+
+
+\section{Quantifiers are not Worlds: Types are Portable}
+
+\newcommand{\Q}{}
+ Let us consider functions and their types.  There is a set $Q$ of
+\emph{quantifiers}, characterising the varieties of functional
+abstraction which are possible. Each quantifier acts as an endofunctor on
+worlds, $\Q{q}w$: If $u \wto w$, then $\Q{q}u \wto \Q{q}w$.  This action explains
+how functions change their usage as they move between worlds.
+
+\newcommand{\V}{\mathit}
+\newcommand{\F}{\mathsf}
+\newcommand{\D}{\mathsf}
+Our two-world example provides motivation for this choice. We should
+expect that $\F{+}$ exists at runtime and can add two runtime numbers,
+but we should be sorely disappointed if $\F{+}$, on arrival at the type
+level, could not also be used for numbers
+existing only at the type level. We should be able to type vector
+concatentation without insisting that the lengths of the vectors
+exist at run time. Let us therefore equip our example system with
+\[
+Q=\{\Q{\Pi},\Q{\cap}\}\qquad
+\begin{array}[t]{l|cc}
+\Q{q}w & \earth & \heaven \\
+\hline
+\Pi & \earth & \heaven \\
+\cap & \heaven & \heaven
+\end{array}
+\]
+and thus ensure that all functions used in types take type-level
+values (or runtime values, which can flow to the type-level).
+
+\newcommand{\qt}[3]{(\Q{#1}\,#2\hb #3)\to}
+\newcommand{\pit}{\qt\Pi}
+\newcommand{\cat}{\qt\cap}
+The formal treatment will be more carefully bidirectional, but
+informally, the relevant rules are.
+\[\begin{array}{c}
+\Rule{\Gamma,\Q{q}w\,\V{x}\hb S \vdash w\, t : T}
+  {\Gamma\vdash w\,\lambda x\mapsto t : \qt qxS T}
+\\
+\Rule{\Gamma\vdash w\,f : \qt qxS T\qquad\Gamma\vdash \Q{q}w\;s : S}
+  {\Gamma\vdash w\,f\,s : T[s/\V{x}]}
+\end{array}\]
+
+We will thus be able to type
+\[\begin{array}{ll}
+\F{vappend} : & \cat{\V{m}}{\D{Nat}}\cat{\V{n}}{\D{Nat}}\\
+  & \pit{\V{xs}}{\D{Vec}\:\V{m}}\pit{\V{ys}}{\D{Vec}\:\V{n}}
+   \D{Vec}\:(\V{m}\F{+}\V{n})
+\end{array}\]
+
+\newcommand{\word}{\overline}
+Now, in the course of checking an
+argument which itself is an application, the action of quantifiers on
+worlds is \emph{iterated}. Accordingly, the worlds we can reach from a
+given $w$ by iterated quantification or type formation form a
+subcategory $\word{Q}\,w$ of $W$, `worlds \emph{local} to $w$', whose
+objects are given by words in $\word{q}\in (Q\cup\{\Ty\})^\ast$, and
+whose arrows $\word{Q}\,w(\word{q},\word{q'})$ are exactly the arrows
+$\word{q}w\wto\word{q'}w$.
+
+The key additional requirement which makes typing survive transmission
+between worlds is that $\word{Q}$ is itself a functor from $W$ to
+preorders. Whenever $v\wto w$, we need to map
+$\word{Q}\,v(\word{q},\word{q'})$ to
+$\word{Q}\,w(\word{q},\word{q'})$, so $\word{q}v\wto\word{q'}v$
+implies $\word{q}w\wto\word{q'}w$. That is, embedding between worlds
+preserves their \emph{local} preorder structure.
+
+
+\section{Syntax and Computation}
+
+Let us develop a more formal account of the situation. I propose to
+adopt a bidirectional approach, explicitly separating those syntactic
+forms from which types are synthesized and those for which types
+proposed in advance are checked.
+\newcommand{\neu}{\underline}
+\newcommand{\Type}{\textsf{Type}}
+\[\begin{array}{rrl}
+s,t,R,S,T,U & ::= & \neu{e} \\
+              &   |  & \Type \\
+              &   |  & (q\,x\hb S)\to T  \\
+              &   |  & \lambda x\mapsto t \medskip\\
+e,f,E,F & ::= & (s\hb S) \\
+              &   |  & x \\
+              &   |  & f\:s
+\end{array}\]
+Observe that worlds in $W$ occur nowhere in the syntax of terms.
+Quantifiers from $Q$, interpreted differently in different worlds, are
+the things we see.
+
+Substitution is defined as usual, but note that it makes sense only to
+substitute $[e/x]$, not $[s/x]$. Moreover, $\lambda$ is
+unencumbered by type annotation, but that any $\beta$-redex
+necessarily requires a type annotation. Reduction is based on these
+two rules:
+\[
+(\lambda x\mapsto t : (q\,x\hb S)\to T)\:s \leadsto t[(s\hb S)/x]
+\qquad
+\neu{(s\hb S)}\leadsto s
+\]
+Ultimately, we can eliminate type annotation from the system and insist
+on computation in larger steps, by \emph{hereditary}
+substitution. However, for now, let us work with a small-step system,
+in order to develop the rest of the metatheoretical apparatus without
+requiring the machinery of normalization. Indeed, to put my money
+where my mouth is and also to reduce digression on the topic of
+cumulative hierarchies (about which I have too much to say to say it
+here), I shall work in the pleasingly na\"\i{}ve world of
+$\Type$-in-$\Type$.
+
+\newcommand{\cto}{\twoheadrightarrow}
+
+Computation, $t \cto t'$, is the
+reflexive-transitive contextual closure of $\leadsto$. It is
+straightforward to show that $\cto$ is stable under substitution.
+Moreover, as the contraction schemes contain no critical pairs, a
+Takahashi-style `parallel reduction' argument shows that $\cto$ has
+the `diamond property': if $R\cto S$ and $R\cto T$, then for some
+$R'$, $S\cto R'$ and $T\cto R'$.
+
+
+\section{Typing Rules}
+
+Typing contexts look like this
+\[
+\Gamma,\Delta \;::=\; \cdot \;|\; \Gamma, w\,x\hb S
+\]
+
+Let us have judgment forms
+\[
+\Gamma \vdash \qquad
+\Gamma \vdash w\; T \ni t \qquad
+\Gamma \vdash w\; e \in S
+\]
+
+Context validity is as follows.
+\[
+\Axiom{\cdot\vdash}
+\qquad
+\Rule{\Gamma\vdash w\;\Type\ni S\quad w\in\Ty}
+  {\Gamma,w\,x\hb S\vdash}
+\]
+
+I write $S\le T$ for the relation `an $S$ can be used wherever a $T$
+is needed'. Locally, I define this by the rather symmetrical property
+of computational joinability, $\exists U.\, S\cto U \wedge T\cto U$,
+but we can imagine deploying standard methods to add $\eta$-rules. In
+a cumulative setting, symmetry would evaporate, but a directed
+inclusion is enough.
+
+Type checking works like this:
+\[\begin{array}{c}
+\textbf{(typ)}\;\Rule{w\in\Ty\quad\Gamma\vdash}
+  {\Gamma\vdash w\;\Type\ni\Type}
+\qquad
+\textbf{(fun)}\;\Rule{w\in\Ty\quad \Gamma,qw\,x\hb S \vdash w\;\Type\ni T}
+  {\Gamma\vdash w\;\Type\ni(q\,x\hb S)\to T}
+\\
+\textbf{(syn)}\;\Rule{\Gamma \vdash w\; e\in S\quad S\le T}
+   {\Gamma \vdash w\; T\ni\neu{e}}
+\qquad
+\textbf{(abs)}\;\Rule{\Gamma,qw\,x\hb S \vdash w\;T\ni t}
+  {\Gamma\vdash w\;(q\,x\hb S)\to T\ni \lambda x\mapsto t}
+\end{array}\]
+
+Type synthesis works like this:
+\[\begin{array}{c}
+\textbf{(chk)}\;\Rule{\Gamma\vdash \Ty w\;\Type\ni S \quad
+  S\cto T\quad \Gamma\vdash w\; T\ni s}
+  {\Gamma \vdash w\; (s\hb S)\in S}
+\qquad
+\textbf{(var)}\;\Rule{\Gamma,u\,x\hb S,\Delta \vdash \qquad u\wto w}
+  {\Gamma,u\,x\hb S,\Delta \vdash w\; x\in S}
+\\
+\textbf{(app)}\;\Rule{\Gamma\vdash w\; f\in R\quad R \cto (q\,x\hb S)\to T \quad
+         \Gamma\vdash qw\; S\ni s}
+  {\Gamma\vdash w\; f\:s \in T[(s\hb S)/x]}
+\end{array}\]
+
+Context validity amounts to this:
+\[
+\textbf{(emp)}\;\Axiom{\quad\vdash\quad}
+\qquad
+\textbf{(ext)}\;\Rule{\Gamma\vdash \Ty u\;\Type\ni S}
+  {\Gamma,u\,x\hb S\vdash}
+\]
+
+It is my habit to let the metavariable $J$ range over anything which
+may extend a context to a judgment and to write $\Gamma\vdash J$ for
+that judgment. E.g., if $J = \Delta\vdash$, $\Gamma\vdash J$ is the
+judgment $\Gamma,\Delta\vdash$.
+
+The following sanity property is admissible, by straightforward
+induction on derivations.
+\[
+\Rule{\Gamma\vdash J}
+  {\Gamma \vdash}
+\]
+
+With the usual remarks about variable freshness, we also have
+thinning admissible,
+\[
+\Rule
+ {\Gamma \vdash w\;\Type\ni S\quad w\in\Ty\quad\Gamma\vdash J}
+ {\Gamma,u\,x\hb S\vdash J}
+\]
+and thence a chance to establish stability under substitution by the
+usual method of glorified substitution
+\[
+\Rule
+ {\Gamma,u\,x\hb S\vdash J \quad S\cto T\quad \Gamma\vdash u\; T\ni s}
+ {\Gamma\vdash J[(s\hb S)/x]}
+\]
+simply because wherever in a derivation the variable rule is used, we
+shall be able to replace it by a suitably thinned synthesis for $(s\hb
+S)\in S$. The catch, however, is that the variable can be transported
+up the world preorder. We must show that its replacement can be
+correspondingly transported.
+
+It might be nice to show the following admissible (and indeed they are)
+\[
+\Rule{\Gamma \vdash v\;T\ni t\quad v\wto w}
+  {\Gamma \vdash w\;T\ni t}
+\qquad
+\Rule{\Gamma \vdash v\;e \in S \quad v\wto w}
+  {\Gamma \vdash w\;e\in S}
+\]
+but the obvious strategy of induction on derivations will fail as soon
+as we try to go under a binder, putting $v$s and $w$s into the
+context.
+
+We need a suitable generalization to make the induction go
+through. The key is to consider judgments-with-world-holes, $J(\cdot)$
+where some quantifier-word-applied $\word{q}\cdot$ can stand as a
+world: in particular, let us insist that the target world of a typing
+judgment is of that form. We can form a proper judgment $J(w)$ by
+substituting $w$ for the $\cdot$ and computing the iterated quantifier
+action.
+
+\textbf{Lemma (world subsumption).~} The following is admissible.
+\[
+\Rule{\Gamma\vdash J(v)\quad v\wto w}
+     {\Gamma\vdash J(w)}
+\]
+\textbf{Proof.~} Induction on derivations. Let us proceed rule by
+rule.
+\begin{description}
+\item[emp] $J(\cdot)$ is $\vdash$, so the assumption and conclusion coincide
+\item[ext] there is nothing to prove unless
+  $J(\cdot)=\Delta(\cdot),\word{q}\cdot\,x\hb S\vdash$; if so, we must have
+  had the premise $\Gamma,\Delta(v)\vdash \Ty\word{q}v\;\Type\ni S$, so the inductive
+  hypothesis tells us that $\Gamma,\Delta(w)\vdash \Ty\word{q}w\;\Type\ni
+  S$, and we may deduce that $\Gamma,\Delta(w)\vdash
+  \Ty\word{q}w\;\Type\ni S$
+\item[typ] we have
+  $\Gamma,\Delta(v)\vdash\word{q}v\;Type\ni\Type$, so we must
+  have had $\word{q}v\in\Ty$ and $\Gamma,\Delta(v)\vdash$;
+  $\word{q}\cdot$ is monotonic and $\Ty$
+  is an upset, so $\word{q}w\in\Ty$; by inductive hypothesis,
+  $\Gamma,\Delta(w)\vdash$; we thus deduce
+  $\Gamma,\Delta(w)\vdash\word{q}w\;\Type\ni\Type$
+\item[fun] we have
+  $\Gamma,\Delta(v)\vdash\word{q}v\;\Type\ni(q\,x\hb S)\to T$, so we
+  must have had $\Gamma,\Delta(v),q\word{q}v\,x\hb S\vdash\;\Type\ni
+  T$, with $\word{q}v\in\Ty$; as before, $\word{q}w\in\Ty$ and
+  by induction $\Gamma,\Delta(w),q\word{q}w\,x\hb S\vdash\;\Type\ni
+  T$; hence $\Gamma,\Delta(w)\vdash\word{q}w\;\Type\ni(q\,x\hb
+  S)\to T$
+\item[syn] induction
+\item[abs] induction---as with \textbf{fun}, generalizing to
+  $J(\cdot)$ lets us bind a variable in world $q\word{q}\cdot$
+\item[chk] induction
+\item[var] there are two cases
+  \begin{enumerate}
+  \item $u\,x\hb S$ in $\Gamma,\Delta(\cdot)$ with no $\cdot$ in $u$;
+    $\Gamma,\Delta(v)\vdash\word{q}v\;x\in S$\\
+    we must have $\Gamma,\Delta(v)\vdash$ and $u\wto
+    \word{q}v$; by induction, $\Gamma,\Delta(w)\vdash$;
+    monotonicity tells us that $\word{q}v\wto\word{q}w$,
+    so by transitivity, $u\wto\word{q}w$; we may conclude
+    $\Gamma,\Delta(w)\vdash\word{q}w\;x\in S$
+  \item $\word{q'}\cdot\,x\hb S$ in $\Gamma,\Delta(\cdot)$;
+    $\Gamma,\Delta(v)\vdash\word{q}v\;x\in S$\\
+    we must have $\Gamma,\Delta(v)\vdash$ and $\word{q'}v\wto
+    \word{q}v$; by induction, $\Gamma,\Delta(w)\vdash$;
+    functoriality of $\word{Q}$ tells us that
+    $\word{q'}w\wto \word{q}w$; we may conclude
+    $\Gamma,\Delta(w)\vdash\word{q}w\;x\in S$
+  \end{enumerate}
+\item[app] induction \hfill $\square$
+\end{description}
+
+We now obtain stability under substitution, as stated above, by a
+straightforward induction on derivations. The crux comes when we are
+given $\Gamma,u\,x\hb S,\Delta\vdash w\;x\in S$ with $u\wto v$, $S\cto T$ and
+$\Gamma\vdash u\;T\ni s$ and asked to deduce
+$\Gamma,\Delta[s:S/x]\vdash w\;s:S\in S$. We have just what we need to
+establish $\Gamma\vdash u\;s:S\in S$, then world subsumption and
+thinning finish the job.
+
+\section{Detritus}
+
+I'll write this when I know what I'm talking about. I shall probably
+cite~\cite{brady:indices}.
+
+
+
+\bibliographystyle{plainnat} % basic style, author-year citations
+\bibliography{Ornament} % name your BibTeX data base
+
+
+\end{document}
